@@ -17,7 +17,7 @@ const app = express();
 const port = process.env.PORT;
 
 const corsOptions = {
-  origin: process.env.FRONTEND_URL, 
+  origin: process.env.FRONTEND_URL || "https://start-hidrofarm.site", 
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true, 
