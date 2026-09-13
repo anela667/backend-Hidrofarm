@@ -1,6 +1,6 @@
 import {
   createPlan,
-  getPlanByUserIdPlanIdDate,
+  getPlanByUserIdPlantMethodDate,
   getPlanByUserId,
   getPlanOnlyByIdUser,
   deletePlanById,
@@ -13,14 +13,8 @@ import {
 } from "../../database/models/planting.js";
 import { deleteLogsByPlanId } from "../../database/models/logs.js";
 
-// Metode hidroponik yang didukung sistem, dipakai untuk validasi input
-// dan untuk memilih jadwal kegiatan (planting) yang sesuai.
 const SUPPORTED_METHODS = ["NFT", "Wick System"];
 
-// Perkiraan kepadatan tanam (jumlah tanaman per m2) untuk tiap metode.
-// Dipakai untuk menghitung estimasi jumlah tanaman dari luas lahan yang
-// diinput user, karena user sekarang input luas lahan, bukan jumlah
-// tanaman secara manual.
 const PLANT_DENSITY_PER_M2 = {
   NFT: 25,
   "Wick System": 16,
@@ -32,12 +26,39 @@ const estimateCount = (method, area) => {
   return Math.max(estimated, 1);
 };
 
+const METHOD_RECOMMENDATION = {
+  Sawi: {
+    recommended: ["NFT", "Wick System"],
+    reason:
+      "Sawi adalah sayuran daun yang ringan dengan akar dangkal dan kebutuhan nutrisi rendah, jadi cocok dengan kedua metode.",
+  },
+  Selada: {
+    recommended: ["NFT", "Wick System"],
+    reason:
+      "Selada adalah sayuran daun yang ringan dengan akar dangkal dan kebutuhan nutrisi rendah, jadi cocok dengan kedua metode.",
+  },
+  "Tomat Ceri": {
+    recommended: ["NFT"],
+    reason:
+      "Tomat ceri adalah tanaman buah yang berat dan butuh nutrisi/air dalam jumlah besar saat berbuah. Wick System (sistem sumbu pasif) berisiko kurang optimal mengalirkan nutrisi saat tanaman sudah besar dan berbuah lebat.",
+  },
+};
+
+const getMethodWarning = (plantName, method) => {
+  const info = METHOD_RECOMMENDATION[plantName];
+  if (!info || info.recommended.includes(method)) return null;
+
+  return `For ${plantName}, the recommended method is ${info.recommended.join(
+    " or "
+  )}. ${info.reason} You can still continue with ${method}, but results may not be optimal.`;
+};
+
 const buildPlanData = async (plans) => {
   const data = [];
 
   for (const element of plans) {
     const plant = await getPlantsByPlantId(element.id_plant);
-    if (!plant) continue; // skip a plan pointing to a plant that no longer exists
+    if (!plant) continue; 
     const planting = await getPlantingByPlantIdAndMethod(
       element.id_plant,
       element.method
@@ -88,16 +109,17 @@ const plan = async (req, res) => {
     });
   }
 
-  const alreadyFarmForToday = await getPlanByUserIdPlanIdDate(
+  const alreadyFarmForToday = await getPlanByUserIdPlantMethodDate(
     id_pemilik,
     id_plant,
+    method,
     started_at
   );
 
   if (alreadyFarmForToday != null) {
     return res.status(400).json({
       status: "error",
-      message: "You have already made a plan for this plant today!",
+      message: "You have already made a plan for this plant using this method today!",
       data: null,
     });
   }
@@ -108,10 +130,13 @@ const plan = async (req, res) => {
   if (createdPlan && createdPlan.affectedRows > 0) {
     const plans = await getPlanByUserId(id_pemilik);
     const data = await buildPlanData(plans);
+    const plant = await getPlantsByPlantId(id_plant);
+    const warning = getMethodWarning(plant?.name, method);
 
     return res.status(200).json({
       status: "success",
       message: "Plan created successfully!",
+      warning,
       data,
     });
   }
@@ -153,10 +178,6 @@ const getPlanById = async (req, res) => {
   });
 };
 
-// Hapus 1 baris jadwal (planting) langsung dari tabel master.
-// Catatan: karena `planting` dipakai bareng oleh semua plan dengan jenis
-// tanaman + metode yang sama, hapus di sini akan hilang dari kalender
-// SEMUA plan (bukan cuma 1 plan tertentu) yang pakai kombinasi itu.
 const deletePlantingActivity = async (req, res) => {
   const id = parseInt(req.params.id);
 
