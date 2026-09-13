@@ -22,19 +22,26 @@ const createPlan = async (id_pemilik, id_plant, method, area, count) => {
   }
 };
 
-const getPlanByUserIdPlanIdDate = async (
+// NOTE: sengaja ikut memfilter berdasarkan `method`. Satu tanaman yang
+// sama boleh punya lebih dari satu rencana di hari yang sama selama
+// metodenya berbeda (mis. Selada dengan Wick System DAN Selada dengan
+// NFT), karena keduanya punya jadwal perawatan (planting) yang berbeda.
+// Yang tidak boleh cuma bikin rencana dobel untuk kombinasi tanaman +
+// metode yang PERSIS sama di hari yang sama.
+const getPlanByUserIdPlantMethodDate = async (
   id_pemilik,
   id_plant,
+  method,
   started_at
 ) => {
   const sql =
-    "SELECT * FROM plan WHERE id_pemilik = ? AND id_plant = ? AND started_at = ?";
+    "SELECT * FROM plan WHERE id_pemilik = ? AND id_plant = ? AND method = ? AND started_at = ?";
 
   try {
     const result = await new Promise((resolve, reject) => {
       connection.query(
         sql,
-        [id_pemilik, id_plant, started_at],
+        [id_pemilik, id_plant, method, started_at],
         (error, results) => {
           if (error) return reject(error);
           resolve(results);
@@ -44,7 +51,7 @@ const getPlanByUserIdPlanIdDate = async (
 
     return result[0] || null;
   } catch (error) {
-    console.error("Terjadi kesalahan dalam getPlanByUserIdPlanIdDate:", error);
+    console.error("Terjadi kesalahan dalam getPlanByUserIdPlantMethodDate:", error);
   }
 };
 
@@ -118,7 +125,7 @@ const deletePlanById = async (id_plan) => {
 
 export {
   createPlan,
-  getPlanByUserIdPlanIdDate,
+  getPlanByUserIdPlantMethodDate,
   getPlanByUserId,
   getPlanById,
   getPlanOnlyByIdUser,
